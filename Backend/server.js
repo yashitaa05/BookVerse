@@ -4,6 +4,9 @@ const dotenv = require("dotenv");
 const connection = require("./config/db");
 const bookRoutes = require("./routes/book");
 const conversationRoutes = require("./routes/conversation")
+const tutorRoutes =require("./routes/tutor");
+const audioRoutes = require("./routes/audio")
+
 
 dotenv.config();
 const app = express();
@@ -16,8 +19,11 @@ connection
     app.use(express.json());
     app.use("/api/books", bookRoutes);
     app.use("/api/conversation", conversationRoutes);
-    app.use("/audios",express.static("audios"));
-    // console.log(require.resolve("./routes/book"));
+    // Serve static audio files
+    app.use("/api/audios/static", express.static("audios"));
+    // Mount audio API routes
+    app.use("/api/audio", audioRoutes);
+    app.use("/api/tutor", tutorRoutes);
 
     app.listen(5000, () => {
       console.log("Server is running on port 5000");

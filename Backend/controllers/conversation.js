@@ -139,6 +139,27 @@ const generateChapter = async (req, res) => {
   }
 };
 
+// Get conversations by chapter ID
+const getChapterConversations = async (req, res) => {
+  try {
+    const { chapterId } = req.params;
+    
+    const conversations = await Conversation.find({ chapterId }).sort({ createdAt: -1 });
+    
+    return res.status(200).json({
+      success: true,
+      conversations,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
 module.exports = {
   generateChapter,
+  getChapterConversations,
 };

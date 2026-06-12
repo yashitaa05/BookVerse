@@ -1,10 +1,8 @@
-const Conversation = require("../models/conversation" );
-
+const Conversation = require("../models/conversation");
 const Audio = require("../models/audio");
+const { generateAudio } = require("../services/audio");
 
-const { generateAudio } = require(" ../services/audio "); 
-
-const generateAudioFile =
+const generateChapterAudio =
   async (req, res) => {
     try {
       const {
@@ -19,13 +17,14 @@ const generateAudioFile =
       if (!conversation) {
         return res.status(404).json({
           success: false,
+          message:
+            "Conversation not found",
         });
       }
 
-      const audioPath =
+      const audioBase64 =
         await generateAudio(
-          conversation.generatedText,
-          conversation._id
+          conversation.generatedText
         );
 
       const audio =
@@ -39,8 +38,10 @@ const generateAudioFile =
           audioType:
             conversation.mode,
 
-          audioUrl:
-            audioPath,
+          language:
+            conversation.language,
+
+          audioBase64,
         });
 
       res.json({
@@ -52,10 +53,12 @@ const generateAudioFile =
 
       res.status(500).json({
         success: false,
+        message:
+          error.message,
       });
     }
   };
 
 module.exports = {
-  generateAudioFile,
+  generateChapterAudio,
 };

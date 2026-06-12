@@ -134,8 +134,97 @@ const generateBookContent = async (req, res) => {
   }
 };
 
+// Get all books
+const getBooks = async (req, res) => {
+  try {
+    const books = await Book.find().sort({ createdAt: -1 });
+    res.status(200).json({
+      success: true,
+      books,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Get book by ID with its chapters
+const getBookById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const book = await Book.findById(id);
+    
+    if (!book) {
+      return res.status(404).json({
+        success: false,
+        message: "Book not found",
+      });
+    }
+
+    const chapters = await Chapter.find({ bookId: book._id }).sort({ chapterNumber: 1 });
+
+    res.status(200).json({
+      success: true,
+      book,
+      chapters,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Delete a book and all its chapters and conversations
+const deleteBook = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const book = await Book.findById(id);
+
+    if (!book) {
+      return res.status(404).json({
+        success: false,
+        message: "Book not found",
+      });
+    }
+
+    // Find and delete all chapters
+    const chapters = await Chapter.find({ bookId: book._id });
+    const chapterIds = chapters.map((c) => c._id);
+
+    // Delete conversations linked to those chapters
+    if (chapterIds.length > 0) {
+      await Conversation.deleteMany({ chapterId: { $in: chapterIds } });
+    }
+
+    // Delete chapters
+    await Chapter.deleteMany({ bookId: book._id });
+
+    // Delete the book itself
+    await Book.findByIdAndDelete(id);
+
+    res.status(200).json({
+      success: true,
+      message: "Book deleted successfully",
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 module.exports = {
   uploadBook,
   generateBookContent,
+  getBooks,
+  getBookById,
+  deleteBook,
 };
-

@@ -12,21 +12,11 @@ const audioSchema = new mongoose.Schema(
       ref: "Conversation",
     },
 
-    audioType: {
-      type: String,
-      enum: [
-        "friendly",
-        "teacher",
-        "podcast",
-        "story",
-      ],
-    },
-
-    audioUrl: String,
+    audioType: String,
 
     language: String,
 
-    duration: Number,
+    audioBase64: String
   },
   {
     timestamps: true,

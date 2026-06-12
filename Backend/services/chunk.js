@@ -1,6 +1,6 @@
 const splitIntoChunks = (
   text,
-  chunkSize = 12000
+  chunkSize = 8000
 ) => {
   if (!text || typeof text !== "string") {
     return [];

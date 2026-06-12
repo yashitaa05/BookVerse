@@ -1,11 +1,10 @@
-const express =
-  require("express");
+const express = require("express");
+const { generateChapterAudio } = require("../controllers/audio");
+const router = express.Router();
 
-const { generateAudioFile } = require("../controllers/audio");
-
-const router =
-  express.Router();
-
-router.post("/generateaudio", generateAudioFile);
+router.post(
+  "/generate",
+  generateChapterAudio
+);
 
 module.exports = router;
