@@ -17,16 +17,17 @@ connection
 
     app.use(cors());
     app.use(express.json());
+
     app.use("/api/books", bookRoutes);
     app.use("/api/conversation", conversationRoutes);
-    // Serve static audio files
     app.use("/api/audios/static", express.static("audios"));
-    // Mount audio API routes
     app.use("/api/audio", audioRoutes);
     app.use("/api/tutor", tutorRoutes);
 
-    app.listen(5000, () => {
-      console.log("Server is running on port 5000");
+    const PORT = process.env.PORT || 5000;
+
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
     });
   })
   .catch((err) => {
