@@ -18,9 +18,7 @@ connection
 
     app.use(
       cors({
-        origin:
-          process.env.CLIENT_URL ||
-          "*",
+        origin:"https://bookverse-1-knuw.onrender.com",
         credentials: true,
       })
     );
