@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, MessageSquare, Headphones, HelpCircle, Loader2, Play } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { ArrowLeft, MessageSquare, HelpCircle, Loader2, Play, Square } from 'lucide-react';
 import { api } from '../api';
+import { speakChunks, stopSpeech } from '../utils/speech';
 
 const ChapterView = () => {
   const { chapterId } = useParams();
@@ -11,14 +12,9 @@ const ChapterView = () => {
   const [question, setQuestion] = useState('');
   const [tutorResponse, setTutorResponse] = useState('');
   const [askingTutor, setAskingTutor] = useState(false);
-  const [audioUrl, setAudioUrl] = useState(null);
-  const [generatingAudio, setGeneratingAudio] = useState(false);
+  const [speakingId, setSpeakingId] = useState(null);
 
-  useEffect(() => {
-    fetchConversations();
-  }, [chapterId]);
-
-  const fetchConversations = async () => {
+  const fetchConversations = useCallback(async () => {
     try {
       const data = await api.getChapterConversations(chapterId);
       setConversations(data.conversations);
@@ -27,7 +23,14 @@ const ChapterView = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [chapterId]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchConversations();
+
+    return () => stopSpeech();
+  }, [fetchConversations]);
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -59,17 +62,23 @@ const ChapterView = () => {
     }
   };
 
-  const handlePlayAudio = async (conversationId) => {
-    setGeneratingAudio(true);
-    try {
-      const data = await api.generateAudio(conversationId);
-      setAudioUrl(`data:audio/wav;base64,${data.audio.audioBase64}`);
-    } catch (error) {
-      console.error('Failed to play audio', error);
-      alert('Failed to generate audio');
-    } finally {
-      setGeneratingAudio(false);
-    }
+  const handleSpeakConversation = (conversation) => {
+    stopSpeech();
+    setSpeakingId(conversation._id);
+
+    speakChunks({
+      text: conversation.generatedText,
+      onEnd: () => setSpeakingId(null),
+      onError: (error) => {
+        setSpeakingId(null);
+        alert(String(error?.message || error));
+      },
+    });
+  };
+
+  const handleStopSpeech = () => {
+    stopSpeech();
+    setSpeakingId(null);
   };
 
   if (loading) return (
@@ -109,11 +118,14 @@ const ChapterView = () => {
                   <button
                     className="btn btn-secondary"
                     style={{ padding: '0.5rem' }}
-                    onClick={() => handlePlayAudio(conv._id)}
-                    disabled={generatingAudio}
-                    title="Generate Audio"
+                    onClick={() =>
+                      speakingId === conv._id
+                        ? handleStopSpeech()
+                        : handleSpeakConversation(conv)
+                    }
+                    title="Speak with browser voice"
                   >
-                    {generatingAudio ? <Loader2 size={18} className="spin" /> : <Play size={18} />}
+                    {speakingId === conv._id ? <Square size={18} /> : <Play size={18} />}
                   </button>
                 </div>
 
@@ -124,15 +136,6 @@ const ChapterView = () => {
             ))
           )}
 
-          {audioUrl && (
-            <div className="glass-panel" style={{ padding: '1rem', position: 'fixed', bottom: '2rem', left: '50%', transform: 'translateX(-50%)', zIndex: 100, display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <Headphones size={24} color="var(--accent-primary)" />
-              <audio controls autoPlay src={audioUrl} style={{ height: '40px' }}></audio>
-              <button className="btn-icon" onClick={() => setAudioUrl(null)} style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
-                <ArrowLeft size={16} />
-              </button>
-            </div>
-          )}
         </div>
 
         <div>

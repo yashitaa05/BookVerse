@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, BookOpen, Headphones, MessageSquare, Sparkles } from 'lucide-react';
 
@@ -40,7 +39,7 @@ const Home = () => {
             <Headphones size={24} />
           </div>
           <h3>Listen Anywhere</h3>
-          <p>Convert your AI-generated conversations into high-quality audio and listen to your books on the go.</p>
+          <p>Listen to text and documents with your browser’s built-in voice system. No premium TTS API key required.</p>
         </div>
       </div>
     </div>

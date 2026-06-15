@@ -5,7 +5,8 @@ const connection = require("./config/db");
 const bookRoutes = require("./routes/book");
 const conversationRoutes = require("./routes/conversation")
 const tutorRoutes =require("./routes/tutor");
-const audioRoutes = require("./routes/audio")
+const authRoutes = require("./routes/authRoutes");
+const documentRoutes = require("./routes/documentRoutes");
 
 
 dotenv.config();
@@ -15,14 +16,36 @@ connection
   .then(() => {
     console.log("MongoDB Connected");
 
-    app.use(cors());
+    app.use(
+      cors({
+        origin:
+          process.env.CLIENT_URL ||
+          "http://localhost:5173",
+        credentials: true,
+      })
+    );
     app.use(express.json());
 
+    app.use("/api/auth", authRoutes);
+    app.use("/api/documents", documentRoutes);
     app.use("/api/books", bookRoutes);
     app.use("/api/conversation", conversationRoutes);
-    app.use("/api/audios/static", express.static("audios"));
-    app.use("/api/audio", audioRoutes);
     app.use("/api/tutor", tutorRoutes);
+
+    app.use((err, req, res, next) => {
+      if (err) {
+        const status = err.code === "LIMIT_FILE_SIZE" ? 413 : 400;
+        return res.status(status).json({
+          success: false,
+          message:
+            err.code === "LIMIT_FILE_SIZE"
+              ? "File size must be 10MB or less"
+              : err.message,
+        });
+      }
+
+      next();
+    });
 
     const PORT = process.env.PORT || 5000;
 

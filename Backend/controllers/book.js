@@ -4,7 +4,10 @@ const Chapter = require("../models/chapter");
 
 const { extractTextFromPDF } = require("../services/pdf.js");
 const { splitIntoChapters } = require("../services/chapter.js");
+const { splitIntoChunks } = require("../services/chunk.js");
 const { generateConversation } = require("../services/gemini.js");
+
+const allowedModes = ["friendly", "teacher", "podcast", "story"];
 
 // Upload Book
 const uploadBook = async (req, res) => {
@@ -63,13 +66,25 @@ const uploadBook = async (req, res) => {
 const generateBookContent = async (req, res) => {
   try {
     const { id } = req.params;
-    const { mode } = req.body;
+    const {
+      mode,
+      language = "English",
+      difficulty = "college",
+    } = req.body;
 
     if (!mode) {
       return res.status(400).json({
         success: false,
         message:
           "mode is required. Example: friendly, teacher, podcast, story",
+      });
+    }
+
+    if (!allowedModes.includes(mode)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid mode. Use one of: friendly, teacher, podcast, story",
       });
     }
 
@@ -97,16 +112,32 @@ const generateBookContent = async (req, res) => {
     const results = [];
 
     for (const chapter of chapters) {
-      const generatedText =
-        await generateConversation(
-          chapter.content,
-          mode
-        );
+      const chunks = splitIntoChunks(chapter.content);
+      let generatedText = "";
+
+      if (!chunks.length) {
+        continue;
+      }
+
+      for (const [index, chunk] of chunks.entries()) {
+        const generated =
+          await generateConversation(
+            chunk,
+            mode,
+            language,
+            difficulty
+          );
+
+        generatedText +=
+          `Part ${index + 1}\n${generated}\n\n`;
+      }
 
       const savedConversation =
         await Conversation.create({
           chapterId: chapter._id,
           mode,
+          language,
+          difficulty,
           generatedText,
         });
 
@@ -121,6 +152,8 @@ const generateBookContent = async (req, res) => {
     res.status(200).json({
       success: true,
       mode,
+      language,
+      difficulty,
       totalChapters: chapters.length,
       conversations: results,
     });

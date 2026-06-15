@@ -1,93 +1,287 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Book, FileText, ChevronRight } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Save, Volume2 } from 'lucide-react';
+import TextEditor from '../components/TextEditor';
+import DocumentUpload from '../components/DocumentUpload';
+import VoiceControls from '../components/VoiceControls';
+import DocumentHistory from '../components/DocumentHistory';
+import SpeakingModeSelector from '../components/SpeakingModeSelector';
+import ModePreview from '../components/ModePreview';
 import { api } from '../api';
-import UploadModal from '../components/UploadModal';
+import { modes, transformByMode } from '../utils/modes';
+import {
+  getAvailableVoices,
+  isSpeechSupported,
+  pauseSpeech,
+  resumeSpeech,
+  speakChunks,
+  stopSpeech,
+} from '../utils/speech';
 
 const Dashboard = () => {
-  const [books, setBooks] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const navigate = useNavigate();
+  const [text, setText] = useState('');
+  const [documents, setDocuments] = useState([]);
+  const [documentsLoading, setDocumentsLoading] = useState(true);
+  const [voices, setVoices] = useState([]);
+  const [selectedVoice, setSelectedVoice] = useState('');
+  const [language, setLanguage] = useState('en-US');
+  const [rate, setRate] = useState(1);
+  const [pitch, setPitch] = useState(1);
+  const [volume, setVolume] = useState(1);
+  const [progress, setProgress] = useState(0);
+  const [speaking, setSpeaking] = useState(false);
+  const [activeChunk, setActiveChunk] = useState('');
+  const [error, setError] = useState('');
+  const [selectedMode, setSelectedMode] = useState(modes.FRIENDLY_CHAT);
+  const [transformedText, setTransformedText] = useState('');
+  const [modeProcessing, setModeProcessing] = useState(false);
 
-  useEffect(() => {
-    fetchBooks();
+  const speechSupported = isSpeechSupported();
+  const selectedVoiceObject = useMemo(
+    () => voices.find((voice) => voice.name === selectedVoice),
+    [selectedVoice, voices]
+  );
+  const selectedModeLabel = useMemo(() => {
+    if (selectedMode === modes.PODCAST) return 'Podcast';
+    if (selectedMode === modes.TUTOR) return 'Tutor';
+    return 'Friendly Chat';
+  }, [selectedMode]);
+
+  const fetchDocuments = useCallback(async () => {
+    setDocumentsLoading(true);
+
+    try {
+      const data = await api.getDocuments();
+      setDocuments(data.documents);
+    } catch (fetchError) {
+      setError(fetchError.message);
+    } finally {
+      setDocumentsLoading(false);
+    }
   }, []);
 
-  const fetchBooks = async () => {
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchDocuments();
+
+    if (!speechSupported) return undefined;
+
+    const loadVoices = () => setVoices(getAvailableVoices());
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+
+    return () => {
+      window.speechSynthesis.onvoiceschanged = null;
+      stopSpeech();
+    };
+  }, [fetchDocuments, speechSupported]);
+
+  const handleDocumentUploaded = (document) => {
+    setText(document.extractedText);
+    setTransformedText('');
+    fetchDocuments();
+  };
+
+  const handleLoadDocument = async (documentId) => {
     try {
-      const data = await api.getBooks();
-      setBooks(data.books);
-    } catch (error) {
-      console.error('Failed to fetch books', error);
-    } finally {
-      setLoading(false);
+      const data = await api.getDocument(documentId);
+      setText(data.document.extractedText);
+      setTransformedText('');
+      setError('');
+    } catch (loadError) {
+      setError(loadError.message);
     }
   };
 
-  const handleUploadSuccess = (newBook) => {
-    navigate(`/book/${newBook._id}`);
+  const handleDeleteDocument = async (documentId) => {
+    try {
+      await api.deleteDocument(documentId);
+      setDocuments((current) =>
+        current.filter((document) => document._id !== documentId)
+      );
+    } catch (deleteError) {
+      setError(deleteError.message);
+    }
+  };
+
+  const handleSaveText = async () => {
+    if (!text.trim()) return;
+
+    try {
+      const data = await api.saveTextDocument('Pasted text', text);
+      setDocuments((current) => [data.document, ...current]);
+      setError('');
+    } catch (saveError) {
+      setError(saveError.message);
+    }
+  };
+
+  const handleTextChange = (value) => {
+    setText(value);
+    setTransformedText('');
+  };
+
+  const handlePreviewMode = () => {
+    if (!text.trim()) return;
+
+    setModeProcessing(true);
+    setError('');
+
+    window.setTimeout(() => {
+      setTransformedText(transformByMode(text, selectedMode));
+      setModeProcessing(false);
+    }, 120);
+  };
+
+  const speakText = (speechText) => {
+    if (!speechText.trim()) return;
+
+    setError('');
+    setProgress(0);
+    setSpeaking(true);
+
+    speakChunks({
+      text: speechText,
+      voice: selectedVoiceObject,
+      lang: language,
+      rate,
+      pitch,
+      volume,
+      onChunkStart: (index, chunk, total) => {
+        setActiveChunk(`Chunk ${index + 1} of ${total}: ${chunk}`);
+      },
+      onProgress: setProgress,
+      onEnd: () => {
+        setSpeaking(false);
+        setActiveChunk('');
+      },
+      onError: (speechError) => {
+        setSpeaking(false);
+        setError(String(speechError?.message || speechError));
+      },
+    });
+  };
+
+  const handleSpeakOriginal = () => {
+    speakText(text);
+  };
+
+  const handleSpeakModeVersion = () => {
+    const nextText = transformedText || transformByMode(text, selectedMode);
+    setTransformedText(nextText);
+    speakText(nextText);
+  };
+
+  const handleResetMode = () => {
+    stopSpeech();
+    setTransformedText('');
+    setActiveChunk('');
+    setProgress(0);
+    setSpeaking(false);
+  };
+
+  const handleStop = () => {
+    stopSpeech();
+    setSpeaking(false);
+    setActiveChunk('');
+    setProgress(0);
   };
 
   return (
     <div className="container animate-fade-in">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+      <div className="dashboard-header">
         <div>
-          <h1>Your Library</h1>
-          <p>Manage and read your uploaded books.</p>
+          <h1>VoiceDoc TTS</h1>
+          <p>Paste text or upload a document and listen using free browser-based text-to-speech.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-          <Plus size={20} />
-          Upload Book
-        </button>
+        <div className="header-badge">
+          <Volume2 size={18} />
+          Web Speech API
+        </div>
       </div>
 
-      {loading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem 0' }}>
-          <div className="btn-icon" style={{ background: 'var(--bg-tertiary)', animation: 'spin 1s linear infinite' }}>
-            <Book size={24} color="var(--accent-primary)" />
-          </div>
-        </div>
-      ) : books.length === 0 ? (
-        <div className="glass-panel" style={{ padding: '4rem 2rem', textAlign: 'center' }}>
-          <div className="btn-icon" style={{ background: 'rgba(99, 102, 241, 0.1)', color: 'var(--accent-primary)', marginBottom: '1.5rem', width: '4rem', height: '4rem' }}>
-            <Book size={32} />
-          </div>
-          <h3 style={{ marginBottom: '0.5rem' }}>Your library is empty</h3>
-          <p style={{ marginBottom: '2rem' }}>Upload your first PDF book to start extracting chapters and generating AI conversations.</p>
-          <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-            <Plus size={20} />
-            Upload PDF
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-3">
-          {books.map((book, index) => (
-            <Link
-              key={book._id}
-              to={`/book/${book._id}`}
-              className="glass-panel"
-              style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', textDecoration: 'none', transition: 'var(--transition)', animationDelay: `${index * 0.1}s` }}
-            >
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-                <div className="btn-icon" style={{ background: 'rgba(99, 102, 241, 0.1)', color: 'var(--accent-primary)' }}>
-                  <Book size={24} />
-                </div>
-                <span style={{ fontSize: '0.75rem', background: 'var(--bg-tertiary)', padding: '0.25rem 0.5rem', borderRadius: 'var(--radius-sm)', color: 'var(--text-secondary)' }}>
-                  {book.processingStatus === 'chapters_created' ? 'Chapters Ready' : book.processingStatus === 'conversation_generated' ? 'Conversations Ready' : 'Processing'}
-                </span>
-              </div>
-              <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem', color: 'var(--text-primary)' }}>{book.title}</h3>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: 'auto' }}>
-                <FileText size={16} />
-                <span>{book.totalChapters || 0} Chapters</span>
-              </div>
-            </Link>
-          ))}
+      {!speechSupported && (
+        <div className="error-box">
+          Your browser does not support the Web Speech API. Try Chrome, Edge, or Safari.
         </div>
       )}
 
-      <UploadModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSuccess={handleUploadSuccess} />
+      {error && <div className="error-box">{error}</div>}
+
+      <div className="tts-layout">
+        <div className="tts-main">
+          <TextEditor text={text} onChange={handleTextChange} activeChunk={activeChunk} />
+
+          <div className="glass-panel tts-card preview-card">
+            <div className="section-heading">
+              <div>
+                <h2>Extracted Text Preview</h2>
+                <p>Review the text before listening.</p>
+              </div>
+              <button
+                className="btn btn-secondary"
+                disabled={!text.trim()}
+                onClick={handleSaveText}
+              >
+                <Save size={18} />
+                Save document
+              </button>
+            </div>
+            <div className="preview-box">
+              {text || 'No text loaded yet. Paste text or upload a document to begin.'}
+            </div>
+          </div>
+
+          <SpeakingModeSelector
+            selectedMode={selectedMode}
+            onModeChange={(mode) => {
+              setSelectedMode(mode);
+              setTransformedText('');
+            }}
+          />
+
+          <ModePreview
+            transformedText={transformedText}
+            selectedModeLabel={selectedModeLabel}
+            hasOriginalText={Boolean(text.trim())}
+            isProcessing={modeProcessing}
+            onPreview={handlePreviewMode}
+            onSpeakOriginal={handleSpeakOriginal}
+            onSpeakMode={handleSpeakModeVersion}
+            onReset={handleResetMode}
+          />
+
+          <DocumentHistory
+            documents={documents}
+            loading={documentsLoading}
+            onLoad={handleLoadDocument}
+            onDelete={handleDeleteDocument}
+          />
+        </div>
+
+        <aside className="tts-side">
+          <DocumentUpload onUploaded={handleDocumentUploaded} />
+          <VoiceControls
+            voices={voices}
+            selectedVoice={selectedVoice}
+            onVoiceChange={setSelectedVoice}
+            language={language}
+            onLanguageChange={setLanguage}
+            rate={rate}
+            pitch={pitch}
+            volume={volume}
+            onRateChange={setRate}
+            onPitchChange={setPitch}
+            onVolumeChange={setVolume}
+            onSpeak={handleSpeakOriginal}
+            onPause={pauseSpeech}
+            onResume={resumeSpeech}
+            onStop={handleStop}
+            progress={progress}
+            speaking={speaking}
+            disabled={!speechSupported || !text.trim()}
+          />
+        </aside>
+      </div>
     </div>
   );
 };

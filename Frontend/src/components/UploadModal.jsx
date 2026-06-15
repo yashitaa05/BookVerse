@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import {
   Upload,
@@ -30,16 +30,15 @@ const UploadModal = ({
     };
   }, [isOpen]);
 
-  useEffect(() => {
-    if (!isOpen) {
-      setFile(null);
-      setTitle("");
-      setError("");
-      setLoading(false);
-    }
-  }, [isOpen]);
-
   if (!isOpen) return null;
+
+  const handleClose = () => {
+    setFile(null);
+    setTitle("");
+    setError("");
+    setLoading(false);
+    onClose();
+  };
 
   const handleFile = (selectedFile) => {
     if (!selectedFile) return;
@@ -91,7 +90,7 @@ const UploadModal = ({
         onSuccess(data.book);
       }
 
-      onClose();
+      handleClose();
     } catch (err) {
       console.error(err);
 
@@ -106,7 +105,7 @@ const UploadModal = ({
 
   return createPortal(
     <div
-      onClick={onClose}
+      onClick={handleClose}
       style={{
         position: "fixed",
         inset: 0,
@@ -133,7 +132,7 @@ const UploadModal = ({
         }}
       >
         <button
-          onClick={onClose}
+          onClick={handleClose}
           style={{
             position: "absolute",
             top: "16px",

@@ -1,9 +1,16 @@
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { BookOpen, LayoutDashboard } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { BookOpen, LayoutDashboard, LogIn, LogOut } from 'lucide-react';
 
 const Navbar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const token = localStorage.getItem('voicedoc_token');
+
+  const handleLogout = () => {
+    localStorage.removeItem('voicedoc_token');
+    localStorage.removeItem('voicedoc_user');
+    navigate('/login');
+  };
 
   return (
     <nav style={{
@@ -33,6 +40,17 @@ const Navbar = () => {
             <LayoutDashboard size={18} />
             Dashboard
           </Link>
+          {token ? (
+            <button type="button" className="btn btn-secondary" onClick={handleLogout}>
+              <LogOut size={18} />
+              Logout
+            </button>
+          ) : (
+            <Link to="/login" className={`btn ${location.pathname === '/login' ? 'btn-primary' : 'btn-secondary'}`}>
+              <LogIn size={18} />
+              Login
+            </Link>
+          )}
         </div>
       </div>
     </nav>

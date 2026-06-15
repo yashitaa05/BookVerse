@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Book, FileText, Settings, Sparkles, Loader2, ArrowRight } from 'lucide-react';
 import { api } from '../api';
@@ -11,11 +11,7 @@ const BookDetails = () => {
   const [generating, setGenerating] = useState(false);
   const [mode, setMode] = useState('friendly');
 
-  useEffect(() => {
-    fetchBookDetails();
-  }, [id]);
-
-  const fetchBookDetails = async () => {
+  const fetchBookDetails = useCallback(async () => {
     try {
       const data = await api.getBook(id);
       setBook(data.book);
@@ -25,7 +21,12 @@ const BookDetails = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchBookDetails();
+  }, [fetchBookDetails]);
 
   const handleGenerateContent = async () => {
     setGenerating(true);
@@ -34,7 +35,7 @@ const BookDetails = () => {
       await fetchBookDetails();
     } catch (error) {
       console.error('Failed to generate content', error);
-      alert('Failed to generate content. See console for details.');
+      alert(error.message || 'Failed to generate content. See console for details.');
     } finally {
       setGenerating(false);
     }
